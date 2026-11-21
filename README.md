@@ -43,12 +43,16 @@ By default the app picks the loudest audio source and prefers a connected Pionee
 Rekordbox opens DJ controllers in exclusive mode, so no other program can record their audio. The info panel then shows "locked by another app". The reliable fix is a silent virtual cable:
 
 1. Install the free [VB-CABLE](https://vb-audio.com/Cable/) driver and restart rekordbox.
-2. In rekordbox, open *Preferences → Audio* and turn on **PC MASTER OUT**. The full label reads "Output audio from the computer's built-in speakers and your DJ equipment".
-3. In Windows, open *Settings → System → Sound → Volume mixer*. While a track is playing, set **rekordbox**'s output device to **CABLE Input**.
+2. In rekordbox, open *Preferences → Audio → Configuration* and turn on **PC MASTER OUT**. The full label reads "Output audio from the computer's built-in speakers and your DJ equipment".
+3. Still in *Preferences → Audio*, go to *Input/Output → Output channels → Master Output* and select **CABLE Input (VB-Audio Virtual Cable)**.
 
-Your mix still plays through the controller. The copy for the PC goes into the cable, where nobody hears it, and the visualizer picks it up automatically.
+Your mix still plays through the controller and its speakers. The PC copy goes into the cable instead of the laptop speakers, where nobody hears it, and the visualizer picks it up automatically.
 
-Muting the laptop speakers instead doesn't work on many sound drivers, because the app then receives silence. As a last resort, the laptop microphone can listen to your speakers.
+Tested with rekordbox 7.2 and a DDJ-FLX4. Two things that don't work:
+- Routing rekordbox to the cable in the Windows volume mixer has no effect, because rekordbox opens the built-in speakers directly.
+- Muting the laptop speakers, or setting them to 0%, silences the app's copy too.
+
+As a last resort, the laptop microphone can listen to your speakers.
 
 ## Tighter sync: Ableton Link
 
