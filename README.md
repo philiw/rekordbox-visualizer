@@ -92,6 +92,7 @@ If you make a typo in the file, the app keeps the previous settings and prints t
 | + / − | Scenes stay twice as long / half as long (from ¼× to 4× the times in `vibes.toml`) |
 | B | Press on a downbeat ("the 1") to line up bars and phrases with the music |
 | C | Shift the colour palette |
+| G | Run on the dedicated GPU (or undo); restarts the app |
 | S | Strobe on/off. Strobes only fire on drops and at the peak of build-ups. |
 | [ / ] (or , / .) | Visual latency −/+ 10 ms |
 | D | Next audio source |
@@ -119,8 +120,11 @@ If you make a typo in the file, the app keeps the previous settings and prints t
 
 ## Laptops with two GPUs
 
-Windows may run Python on the integrated graphics. The app prints the GPU it uses at startup, and the HUD shows the fps.
-To use the dedicated GPU, go to *Settings → System → Display → Graphics*, add your `python.exe` (run `where python` to find it), and set it to **High performance**.
+Windows picks the GPU per program and usually runs Python on the power-saving integrated chip. The info panel shows which GPU is rendering. If a dedicated GPU (NVIDIA / AMD Radeon RX) exists but isn't used, the panel says so: **press G**.
+
+G registers your Python interpreter (`python.exe` and `pythonw.exe`) for **High performance** in Windows' per-app graphics settings and restarts the app on the dedicated GPU. This is the same switch as *Settings → System → Display → Graphics*. It applies to every Python program run with that interpreter. Press **G** again to undo it.
+
+If the panel then says Windows is set but the driver still uses the integrated chip, use the NVIDIA Control Panel instead: open *Manage 3D settings → Program settings*, add the `pythonw.exe` named in the message, and choose *High-performance NVIDIA processor*.
 
 ## Make your own scenes
 

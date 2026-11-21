@@ -25,6 +25,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 import audio
 from vibes import Vibes
+import gpu
 
 HERE = Path(__file__).resolve().parent
 SHADERS = HERE / "shaders"
@@ -273,7 +274,7 @@ class Hud:
         self.f_small = font(["segoeui.ttf", "arial.ttf"], 13)
         self.last = 0.0
 
-    def draw(self, snap, beat, scene_name, locked, strobe, latency_ms, fps, bars=None):
+    def draw(self, snap, beat, scene_name, locked, strobe, latency_ms, fps, bars=None, gpu_msg="", gpu_name=""):
         img = Image.new("RGBA", (self.W, self.H), (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
         d.rounded_rectangle([0, 0, self.W - 1, self.H - 1], 14, fill=(8, 8, 14, 175))
@@ -320,10 +321,12 @@ class Hud:
         d.text((16, 140), f"Source: {dev}", font=self.f_small, fill=(170, 170, 190, 255))
         if snap.get("status"):  # audio problem takes priority over the info line
             d.text((16, 160), "! " + snap["status"][:80], font=self.f_small, fill=(255, 170, 80, 255))
+        elif gpu_msg:
+            d.text((16, 160), "! " + gpu_msg[:90], font=self.f_small, fill=(255, 170, 80, 255))
         else:
-            d.text((16, 160), f"Strobe {'on' if strobe else 'off'}  ·  latency {latency_ms:+d} ms  ·  {fps:.0f} fps",
+            d.text((16, 160), f"Strobe {'on' if strobe else 'off'}  ·  latency {latency_ms:+d} ms  ·  {fps:.0f} fps  ·  {gpu_name}",
                    font=self.f_small, fill=(170, 170, 190, 255))
-        d.text((16, 182), "F full · M monitor · ←/→ scene · L lock · +/- pace · S strobe · B downbeat · H hide",
+        d.text((16, 182), "F full · M monitor · ←/→ scene · L lock · +/- pace · S strobe · G gpu · H hide",
                font=self.f_small, fill=(120, 120, 140, 255))
         self.tex.write(img.tobytes())
 
@@ -344,7 +347,11 @@ class App:
         glfw.make_context_current(self.win)
         glfw.swap_interval(1)
         self.ctx = moderngl.create_context()
-        print(f"[gl] {self.ctx.info['GL_RENDERER']}")
+        self.renderer = self.ctx.info["GL_RENDERER"]
+        print(f"[gl] {self.renderer}")
+        self.gpu_state, self.gpu_msg = gpu.status(self.renderer)
+        if self.gpu_msg:
+            print(f"[gpu] {self.gpu_msg}")
 
         quad = np.array([-1, -1, 1, -1, -1, 1, 1, 1], np.float32)
         self.vbo = self.ctx.buffer(quad.tobytes())
@@ -479,6 +486,8 @@ class App:
             self.analyzer.next_device()
         elif key == glfw.KEY_B:
             self.analyzer.resync_downbeat()
+        elif key == glfw.KEY_G:
+            self.toggle_gpu()
         elif key == glfw.KEY_C:
             self.palette.hue_shift = (self.palette.hue_shift + 1 / 6) % 1.0
         elif key == glfw.KEY_R:
@@ -490,6 +499,17 @@ class App:
                 print(e)
         elif key == glfw.KEY_P:
             self.screenshot()
+
+    def toggle_gpu(self):
+        """G: register this app's Python for the dedicated GPU (or undo it), then restart."""
+        if gpu.dedicated_adapter() is None:
+            return
+        on = gpu.preference(gpu.process_exe()) != 2
+        changed = gpu.set_high_performance(on)
+        what = "High performance (dedicated GPU)" if on else "let Windows decide"
+        print(f"[gpu] Windows graphics preference set to '{what}' for: {', '.join(changed)} - restarting")
+        gpu.restart()
+        glfw.set_window_should_close(self.win, True)
 
     def on_char(self, win, codepoint):
         """Typed characters (keyboard-layout aware): + - change scene pace, [ ] latency."""
@@ -599,7 +619,8 @@ class App:
             self.hud.last = now
             name = self.scenes[d.nxt if d.nxt is not None else d.cur].name
             self.hud.draw(snap, beat, name, d.locked, self.strobe, int(round(self.latency * 1000)), self.fps,
-                          bars=d.bars_needed(snap["section"]))
+                          bars=d.bars_needed(snap["section"]), gpu_msg=self.gpu_msg,
+                          gpu_name=gpu.short(self.renderer))
         pp = self.post_prog
         set_uniform(pp, "uTex", 0)
         set_uniform(pp, "uHud", 1)
