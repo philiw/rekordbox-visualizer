@@ -69,6 +69,16 @@ rekordbox only adds a track to the history after it has been playing for a littl
 
 If your rekordbox has the **LINK** button (Performance mode), switch it on and press **LINK on the playing deck** too. The app then takes tempo and beat phase straight from rekordbox instead of working them out from the audio. If the Link tempo doesn't match the music it hears (for example because the deck isn't linked), the app ignores Link. The HUD shows `LINK` while Link is in use.
 
+## Scene timing and vibes: `vibes.toml`
+
+Open `vibes.toml` in any text editor. Changes apply within about 2 seconds, even while the app is running. The file has three parts:
+
+- **`[timing]`**: how many bars a scene stays, separately for each part of a song: `groove`, `peak` (after a drop), `build` and `calm` (breakdowns). At 140 BPM, 8 bars are about 14 s. Scene changes land on phrase starts, and a drop always cuts straight to a new scene. During a set, **+** and **−** double or halve all of these times.
+- **`[scenes]`**: which parts of a song each scene is used for. Set a scene to `[]` to keep it out of the automatic rotation (you can still pick it with 1–8 or the arrow keys).
+- **`[genres]`**: which scenes fit which genre, using the genre field from your rekordbox library. For example, `"Techno" = ["lasers", "tunnel", "cells"]`. Names match partially and ignore case, so "Techno" also covers "Hard Techno". Genres you don't list can use every scene. When the next track has a different genre, the app fades to a fitting scene at the next 4-bar boundary.
+
+If you make a typo in the file, the app keeps the previous settings and prints the error to `visualizer.log`.
+
 ## Keys
 
 | Key | Action |
@@ -78,10 +88,11 @@ If your rekordbox has the **LINK** button (Performance mode), switch it on and p
 | → / Space, ← | Next / previous scene |
 | 1–8 | Jump to a scene |
 | L | Lock the current scene (stops automatic switching) |
+| + / − | Scenes stay twice as long / half as long (from ¼× to 4× the times in `vibes.toml`) |
 | B | Press on a downbeat ("the 1") to line up bars and phrases with the music |
 | C | Shift the colour palette |
 | S | Strobe on/off. Strobes only fire on drops and at the peak of build-ups. |
-| [ / ] | Visual latency −/+ 10 ms |
+| [ / ] (or , / .) | Visual latency −/+ 10 ms |
 | D | Next audio source |
 | H | Hide / show the HUD |
 | R | Reload the shaders (after editing a scene) |
@@ -97,7 +108,7 @@ If your rekordbox has the **LINK** button (Performance mode), switch it on and p
 --scale 0.75          render at lower resolution if the frame rate drops
 --sensitivity 1.5     input gain for quiet sources
 --latency 30          shift visuals in ms (+ = earlier)
---phrase 16           beats between automatic scene changes (default 32)
+--pace 0.5            scenes change twice as often as set in vibes.toml (2 = half as often)
 --scene tunnel        start on one scene and lock it
 --no-strobe           never flash
 --no-link             ignore Ableton Link
@@ -114,6 +125,7 @@ To use the dedicated GPU, go to *Settings → System → Display → Graphics*, 
 
 Drop a `.glsl` file into `shaders/scenes/` that defines `vec3 scene(vec2 uv, vec2 p)`. The available inputs are listed in `shaders/common.glsl`: `uBeat`, `uKick`, `uBass`, `uEnergy`, `uBuild`, `uDrop`, the palette `uCol1..3`, the spectrum `spec(x)` and so on. Tag it with
 `// @name: My Scene` and `// @moods: calm groove build peak` so the director knows when to use it.
+A scene listed under `[scenes]` in `vibes.toml` uses the moods given there instead.
 Press **R** to reload the shaders while the app is running.
 
 ## How it works

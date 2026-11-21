@@ -1,0 +1,39 @@
+# Rekordbox Visualizer - vibes
+# You can edit this file while the app is running; changes apply within ~2 seconds.
+# Scene names are the file names in shaders/scenes (without .glsl):
+#   cells, grid, kaleido, lasers, plasma, spectrum_ring, starfield, tunnel
+
+[timing]
+# How many bars (1 bar = 4 beats) a scene stays before the next one, per part of the song.
+# At 140 BPM, 8 bars are about 14 seconds. Changes land on the bar grid; anything from
+# 8 bars up lands on phrase starts (every 8 bars).
+groove = 16       # normal groove
+peak   = 8        # the first ~30 s after a drop
+build  = 8        # build-ups
+calm   = 16       # breakdowns and quiet parts
+min_seconds = 8   # never switch faster than this
+# During the set, + and - double or halve all of these.
+
+[scenes]
+# Which parts of the song each scene is used for: calm, groove, build, peak.
+# An empty list [] means "never pick automatically" (still reachable with 1-8 and the arrow keys).
+cells         = ["groove", "peak"]
+grid          = ["groove", "peak"]
+kaleido       = ["groove", "calm", "peak"]
+lasers        = ["peak", "groove", "build"]
+plasma        = ["calm", "build"]
+spectrum_ring = ["groove", "calm"]
+starfield     = ["build", "calm", "peak"]
+tunnel        = ["groove", "peak", "build"]
+
+[genres]
+# Genre of the playing track (from rekordbox) -> the scenes allowed for it.
+# Matching ignores upper/lower case and also matches parts of a genre, so "Techno" also
+# covers "Hard Techno" and "Melodic Techno". Genres not listed here may use every scene.
+# Within these lists the song-part rules above still apply (a breakdown picks a calm one).
+"Techno"      = ["lasers", "tunnel", "cells", "grid", "starfield", "spectrum_ring"]
+"Trance"      = ["kaleido", "starfield", "plasma", "tunnel", "spectrum_ring", "lasers"]
+"House"       = ["grid", "cells", "kaleido", "plasma", "spectrum_ring"]
+"Pop"         = ["grid", "kaleido", "spectrum_ring", "plasma", "cells"]
+"Dance"       = ["grid", "kaleido", "spectrum_ring", "cells", "lasers", "plasma"]
+"Hip-Hop"     = ["grid", "spectrum_ring", "cells", "plasma"]

@@ -24,6 +24,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 import audio
+from vibes import Vibes
 
 HERE = Path(__file__).resolve().parent
 SHADERS = HERE / "shaders"
@@ -78,12 +79,23 @@ def load_scenes(ctx, vbo):
 
 
 # =========================================================================== director
-class Director:
-    """Decides which scene is on screen, when to switch and how (cut / fade / wipe)."""
+TRANSITION_BEATS = {"calm": 8, "build": 2, "peak": 0, "groove": 1}  # 0 = hard cut
 
-    def __init__(self, scenes, phrase_beats=32):
+
+class Director:
+    """Decides which scene is on screen, when to switch and how (cut / fade / wipe).
+
+    Rules (configured in vibes.toml):
+      * every part of the song (calm / groove / build / peak) has its own scene pool,
+      * the playing track's genre narrows the pool further,
+      * scenes stay for N bars and switch on the bar/phrase grid,
+      * a drop cuts straight to a peak scene, other section changes fade.
+    """
+
+    def __init__(self, scenes, vibes):
         self.scenes = scenes
-        self.phrase_beats = phrase_beats
+        self.vibes = vibes
+        self.pace = 1.0               # +/- keys: multiplier on all bar counts
         self.cur = 0
         self.nxt = None
         self.t_start = 0.0
@@ -92,25 +104,44 @@ class Director:
         self.locked = False
         self.history = []
         self.seed = {i: random.random() * 100 for i in range(len(scenes))}
-        self.last_phrase = None
-        self.phrases_on_scene = 0
+        self.last_bar = None
+        self.bars_on_scene = 0
         self.last_section = "idle"
         self.section_seen = 0.0
+        self._section_handled = True
         self.last_switch = 0.0
+        self.genre = None
+        self.genre_dirty = False
         self.flash = 0.0
-        self.flash_col = (1, 1, 1)
         self.pick_start()
 
+    # ------------------------------------------------------------------ choosing
+    def moods(self, i):
+        return self.vibes.moods_for(self.scenes[i])
+
+    def pool(self):
+        return self.vibes.genre_pool(self.genre)
+
+    def fits(self, i, mood):
+        return mood in self.moods(i) and self.vibes.in_pool(self.scenes[i], self.pool())
+
     def pick_start(self):
-        calm = [i for i, s in enumerate(self.scenes) if "calm" in s.moods]
+        calm = [i for i in range(len(self.scenes)) if self.fits(i, "calm")]
         self.cur = random.choice(calm or list(range(len(self.scenes))))
 
     def choose(self, mood):
-        pool = [i for i, s in enumerate(self.scenes) if mood in s.moods and i != self.cur]
-        if not pool:
-            pool = [i for i in range(len(self.scenes)) if i != self.cur] or [self.cur]
-        fresh = [i for i in pool if i not in self.history[-2:]]
-        return random.choice(fresh or pool)
+        n = len(self.scenes)
+        auto = [i for i in range(n) if self.moods(i)]            # [] in vibes.toml = manual only
+        genre = [i for i in auto if self.vibes.in_pool(self.scenes[i], self.pool())]
+        for cands in ([i for i in genre if mood in self.moods(i)],   # genre + song part
+                      genre,                                          # genre, any part
+                      [i for i in auto if mood in self.moods(i)],     # song part, any genre
+                      auto or list(range(n))):
+            others = [i for i in cands if i != self.cur]
+            if others:
+                fresh = [i for i in others if i not in self.history[-2:]]
+                return random.choice(fresh or others)
+        return self.cur
 
     def switch(self, idx, now, beats, bpm, style=None):
         if idx == self.cur and self.nxt is None:
@@ -126,50 +157,67 @@ class Director:
             self.t_start = now
             self.t_dur = beats * 60.0 / max(bpm, 60)
             self.style = random.choice([0, 0, 1, 2, 3]) if style is None else style
-        self.phrases_on_scene = 0
+        self.bars_on_scene = 0
         self.last_switch = now
 
     def manual(self, step=None, index=None, now=0.0, bpm=120.0):
         idx = (self.cur + step) % len(self.scenes) if index is None else index % len(self.scenes)
         self.switch(idx, now, 0.5, bpm, style=0)
 
+    def bars_needed(self, section):
+        return self.vibes.bars(SECTION_MOOD[section], self.pace)
+
+    # ------------------------------------------------------------------ per frame
     def update(self, snap, beat, now):
         bpm = snap["bpm"]
         sec = snap["section"]
-        # transition progress
+        mood = SECTION_MOOD[sec]
+        self.vibes.reload()
         if self.nxt is not None and now - self.t_start >= self.t_dur:
             self.cur, self.nxt = self.nxt, None
-
-        # flash envelope
         self.flash *= math.exp(-(1 / 60) / 0.12)
 
+        track = snap.get("track")
+        genre = (track or {}).get("genre") or None
+        if genre != self.genre:
+            self.genre = genre
+            self.genre_dirty = True   # re-check the scene at the next 4-bar boundary
+
+        # section changes: a drop cuts immediately, others wait 1 s to avoid flapping
         if sec != self.last_section:
             self.last_section = sec
             self.section_seen = now
+            self._section_handled = sec == "drop"
             if sec == "drop":
                 self.flash = 1.0
                 if not self.locked:
                     self.switch(self.choose("peak"), now, 0, bpm)
-            self._section_handled = sec == "drop"
-        # react to stable section changes (avoid flapping)
-        if (not getattr(self, "_section_handled", True) and now - self.section_seen > 1.0
-                and not self.locked):
+        if not self._section_handled and now - self.section_seen > 1.0 and not self.locked:
             self._section_handled = True
-            mood = SECTION_MOOD[sec]
-            if mood not in self.scenes[self.nxt if self.nxt is not None else self.cur].moods:
+            showing = self.nxt if self.nxt is not None else self.cur
+            if not self.fits(showing, mood):
                 self.switch(self.choose(mood), now, 4 if mood == "calm" else 2, bpm)
 
-        # phrase boundaries
-        phrase = math.floor((beat - snap["bar_offset"]) / self.phrase_beats)
-        if self.last_phrase is None:
-            self.last_phrase = phrase
-        if phrase != self.last_phrase:
-            self.last_phrase = phrase
-            self.phrases_on_scene += 1
-            limit = 1 if sec in ("drop",) else 2
-            if not self.locked and self.phrases_on_scene >= limit and now - self.last_switch > 8:
-                beats = {"calm": 8, "build": 2, "peak": 0, "groove": 1}[SECTION_MOOD[sec]]
-                self.switch(self.choose(SECTION_MOOD[sec]), now, beats, bpm)
+        # bar grid: count bars on the current scene and switch on (phrase-aligned) bars
+        bar = math.floor((beat - snap["bar_offset"]) / 4)
+        if self.last_bar is None:
+            self.last_bar = bar
+        if bar != self.last_bar:
+            self.last_bar = bar
+            self.bars_on_scene += 1
+            if self.locked:
+                return
+            showing = self.nxt if self.nxt is not None else self.cur
+            if self.genre_dirty and bar % 4 == 0:
+                self.genre_dirty = False
+                if not self.vibes.in_pool(self.scenes[showing], self.pool()):
+                    self.switch(self.choose(mood), now, 4, bpm)   # new genre: fade to a fitting scene
+                    return
+            need = self.bars_needed(sec)
+            align = 8 if need >= 8 else (4 if need >= 4 else 1)
+            if (self.bars_on_scene >= need and bar % align == 0
+                    and now - self.last_switch > self.vibes.min_seconds):
+                self.switch(self.choose(mood), now, TRANSITION_BEATS[mood], bpm)
 
     @property
     def mix(self):
@@ -226,7 +274,7 @@ class Hud:
         self.f_small = font(["segoeui.ttf", "arial.ttf"], 13)
         self.last = 0.0
 
-    def draw(self, snap, beat, scene_name, locked, strobe, latency_ms, fps):
+    def draw(self, snap, beat, scene_name, locked, strobe, latency_ms, fps, bars=None):
         img = Image.new("RGBA", (self.W, self.H), (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
         d.rounded_rectangle([0, 0, self.W - 1, self.H - 1], 14, fill=(8, 8, 14, 175))
@@ -245,13 +293,13 @@ class Hud:
         d.rounded_rectangle([462, 16, 584, 42], 8, fill=sc + (255,))
         d.text((523, 29), sec.upper(), font=self.f, fill=(10, 10, 10, 255), anchor="mm")
 
-        d.text((16, 56), f"Scene: {scene_name}" + ("   [LOCKED]" if locked else "   [auto]"),
+        d.text((16, 56), f"Scene: {scene_name}" + ("   [LOCKED]" if locked else f"   [auto, {bars} bars]"),
                font=self.f, fill=(230, 230, 240, 255))
         t = snap.get("track")
         if t:
             name = f"{t['artist']} - {t['title']}" if t["artist"] else t["title"]
-            name = name if len(name) < 58 else name[:55] + "..."
-            extra = f"   {t['bpm']:.1f} BPM" if t.get("bpm") else ""
+            name = name if len(name) < 48 else name[:45] + "..."
+            extra = (f"   {t['genre']}" if t.get("genre") else "") + (f"   {t['bpm']:.1f} BPM" if t.get("bpm") else "")
             d.text((16, 78), "Track: " + name + extra, font=self.f_small, fill=(110, 230, 140, 255))
         # phrase progress
         ph = ((beat - snap["bar_offset"]) % 32) / 32
@@ -276,7 +324,7 @@ class Hud:
         else:
             d.text((16, 160), f"Strobe {'on' if strobe else 'off'}  ·  latency {latency_ms:+d} ms  ·  {fps:.0f} fps",
                    font=self.f_small, fill=(170, 170, 190, 255))
-        d.text((16, 182), "F full · M monitor · ←/→ scene · L lock · D source · B downbeat · S strobe · [ ] latency · H hide",
+        d.text((16, 182), "F full · M monitor · ←/→ scene · L lock · +/- pace · S strobe · B downbeat · H hide",
                font=self.f_small, fill=(120, 120, 140, 255))
         self.tex.write(img.tobytes())
 
@@ -327,7 +375,8 @@ class App:
             self.library = rekordbox_db.RekordboxLibrary()
             self.analyzer.library = self.library
         self.analyzer.start()
-        self.director = Director(self.scenes, args.phrase)
+        self.director = Director(self.scenes, Vibes(HERE / "vibes.toml"))
+        self.director.pace = args.pace
         if args.scene:
             hits = [i for i, s in enumerate(self.scenes) if args.scene.lower() in (s.name + s.path.stem).lower()]
             if hits:
@@ -342,6 +391,7 @@ class App:
         self.fullscreen = False
 
         glfw.set_key_callback(self.win, self.on_key)
+        glfw.set_char_callback(self.win, self.on_char)
         if args.fullscreen:
             self.set_fullscreen(True)
 
@@ -432,10 +482,6 @@ class App:
             self.analyzer.resync_downbeat()
         elif key == glfw.KEY_C:
             self.palette.hue_shift = (self.palette.hue_shift + 1 / 6) % 1.0
-        elif key == glfw.KEY_LEFT_BRACKET:
-            self.latency -= 0.01
-        elif key == glfw.KEY_RIGHT_BRACKET:
-            self.latency += 0.01
         elif key == glfw.KEY_R:
             try:
                 self.scenes[:] = load_scenes(self.ctx, self.vbo)
@@ -445,6 +491,23 @@ class App:
                 print(e)
         elif key == glfw.KEY_P:
             self.screenshot()
+
+    def on_char(self, win, codepoint):
+        """Typed characters (keyboard-layout aware): + - change scene pace, [ ] latency."""
+        ch = chr(codepoint)
+        d = self.director
+        if ch == "+":
+            d.pace = min(4.0, d.pace * 2)
+        elif ch == "-":
+            d.pace = max(0.25, d.pace / 2)
+        elif ch in "[,":
+            self.latency -= 0.01
+        elif ch in "].":
+            self.latency += 0.01
+        else:
+            return
+        if ch in "+-":
+            print(f"[vibes] scene pace x{d.pace:g}: groove scenes last {d.vibes.bars('groove', d.pace)} bars")
 
     def screenshot(self, path=None):
         w, h = self.size
@@ -536,7 +599,8 @@ class App:
         if self.hud_on and now - self.hud.last > 0.1:
             self.hud.last = now
             name = self.scenes[d.nxt if d.nxt is not None else d.cur].name
-            self.hud.draw(snap, beat, name, d.locked, self.strobe, int(round(self.latency * 1000)), self.fps)
+            self.hud.draw(snap, beat, name, d.locked, self.strobe, int(round(self.latency * 1000)), self.fps,
+                          bars=d.bars_needed(snap["section"]))
         pp = self.post_prog
         set_uniform(pp, "uTex", 0)
         set_uniform(pp, "uHud", 1)
@@ -592,7 +656,8 @@ def main():
     ap.add_argument("--scale", type=float, default=1.0, help="render resolution scale (0.5 = faster)")
     ap.add_argument("--sensitivity", type=float, default=1.0, help="input gain multiplier")
     ap.add_argument("--latency", type=int, default=0, help="shift visuals vs. audio in ms (+ = earlier beat)")
-    ap.add_argument("--phrase", type=int, default=32, help="beats per phrase for scene changes")
+    ap.add_argument("--pace", type=float, default=1.0,
+                    help="multiply how long scenes stay (0.5 = twice as many changes); see vibes.toml")
     ap.add_argument("--no-strobe", action="store_true", help="disable beat strobes (flashing)")
     ap.add_argument("--no-link", action="store_true", help="don't use Ableton Link for tempo")
     ap.add_argument("--no-library", action="store_true",
