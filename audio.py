@@ -425,6 +425,9 @@ class Analyzer:
         self._strong_kick = False
         if self.section not in ("breakdown", "buildup"):  # remember groove level through breakdowns
             self.kick_peak_ref = max(self.kick_peak_ref * np.exp(-1.0 / (20 * FPS)), 1e-4)
+        # drop trigger: fires on the rising edge of a groove-strength kick, without waiting
+        # for the kick's peak (one analysis step earlier than the normal kick detector)
+        self._drop_hit = kick_flux > 0.5 * self.kick_peak_ref and not silent
         if (p1 > thr and p1 >= kick_flux and p1 > p2 and p1 > 0.3 * self.kick_peak_ref
                 and (now - self.last_kick_t) > 0.22 and not silent):
             kicked = True
@@ -613,14 +616,19 @@ class Analyzer:
         prev = self.section
         if self.silence_time > 2.0:
             sec = "idle"
-        elif (prev in ("breakdown", "buildup") and self.low_bass_time > 4.0 and self._strong_kick
-              and self.bass_ref - bq < 8.0):
+        elif (prev in ("breakdown", "buildup") and self.low_bass_time > 4.0 and self._drop_hit
+              and self.bass_ref - bass_db < 10.0):
+            # bass_db is this analysis step's level: a smoothed value would lag ~0.1 s and make
+            # the first kick of the drop miss the test (the drop then fired a whole beat late)
+            self.kick_env = 1.0
             # bass slams back in after a breakdown -> DROP (fast detector, ~0.1 s)
             sec = "drop"
             self.drop_env = 1.0
             self.drop_count += 1
             self.low_bass_time = 0.0
             self.build = 0.0
+        elif prev == "drop" and now - self.section_since < 8.0:
+            sec = "drop"  # grace period: the slow averages need a few seconds to catch up after a drop
         elif bass_drop > 8.0 or self.pulse_ratio < 0.35:
             self.low_bass_time += 1 / FPS
             self.return_time = 0.0
