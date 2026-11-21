@@ -14,6 +14,14 @@ calm   = 16       # breakdowns and quiet parts
 min_seconds = 8   # never switch faster than this
 # During the set, + and - double or halve all of these.
 
+[transitions]
+# How long the fade into the next scene takes, in beats. 0 = hard cut exactly on the beat.
+# A drop always cuts instantly, whatever you set here.
+groove = 1
+peak   = 0
+build  = 1
+calm   = 4
+
 [scenes]
 # Which parts of the song each scene is used for: calm, groove, build, peak.
 # An empty list [] means "never pick automatically" (still reachable with 1-8 and the arrow keys).

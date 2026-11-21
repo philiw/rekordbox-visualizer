@@ -74,6 +74,7 @@ If your rekordbox has the **LINK** button (Performance mode), switch it on and p
 Open `vibes.toml` in any text editor. Changes apply within about 2 seconds, even while the app is running. The file has three parts:
 
 - **`[timing]`**: how many bars a scene stays, separately for each part of a song: `groove`, `peak` (after a drop), `build` and `calm` (breakdowns). At 140 BPM, 8 bars are about 14 s. Scene changes land on phrase starts, and a drop always cuts straight to a new scene. During a set, **+** and **−** double or halve all of these times.
+- **`[transitions]`**: how long the fade into the next scene takes, in beats, per part of the song. `0` means a hard cut on the beat. Drops always cut instantly, about 16 ms after the first kick of the drop.
 - **`[scenes]`**: which parts of a song each scene is used for. Set a scene to `[]` to keep it out of the automatic rotation (you can still pick it with 1–8 or the arrow keys).
 - **`[genres]`**: which scenes fit which genre, using the genre field from your rekordbox library. For example, `"Techno" = ["lasers", "tunnel", "cells"]`. Names match partially and ignore case, so "Techno" also covers "Hard Techno". Genres you don't list can use every scene. When the next track has a different genre, the app fades to a fitting scene at the next 4-bar boundary.
 

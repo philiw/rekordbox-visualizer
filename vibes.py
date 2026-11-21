@@ -12,6 +12,7 @@ except ImportError:  # pragma: no cover
 
 MOODS = ("calm", "groove", "build", "peak")
 DEFAULT_BARS = {"groove": 16, "peak": 8, "build": 8, "calm": 16}
+DEFAULT_TRANSITIONS = {"groove": 1, "peak": 0, "build": 1, "calm": 4}  # beats; 0 = hard cut
 
 
 class Vibes:
@@ -19,6 +20,7 @@ class Vibes:
         self.path = Path(path)
         self.bars_cfg = dict(DEFAULT_BARS)
         self.min_seconds = 8.0
+        self.trans_cfg = dict(DEFAULT_TRANSITIONS)
         self.scene_moods: dict[str, set[str]] = {}
         self.genres: dict[str, set[str]] = {}
         self.error = ""
@@ -58,6 +60,11 @@ class Vibes:
                 bars[mood] = max(1, int(timing[mood]))
         self.bars_cfg = bars
         self.min_seconds = float(timing.get("min_seconds", 8))
+        trans = dict(DEFAULT_TRANSITIONS)
+        for mood, beats in data.get("transitions", {}).items():
+            if mood in MOODS:
+                trans[mood] = max(0.0, float(beats))
+        self.trans_cfg = trans
         self.scene_moods = {k.lower(): {m.lower() for m in v} for k, v in data.get("scenes", {}).items()}
         self.genres = {k.lower(): {s.lower() for s in v} for k, v in data.get("genres", {}).items()}
         self.error = ""
@@ -71,6 +78,10 @@ class Vibes:
     # ------------------------------------------------------------------ queries
     def bars(self, mood: str, pace: float = 1.0) -> int:
         return max(1, int(round(self.bars_cfg.get(mood, 16) * pace)))
+
+    def transition(self, mood: str) -> float:
+        """Length of the fade into a new scene, in beats (0 = hard cut on the beat)."""
+        return self.trans_cfg.get(mood, 1)
 
     def moods_for(self, scene) -> set[str]:
         """Moods of a scene: vibes.toml wins over the @moods tag in the shader file."""

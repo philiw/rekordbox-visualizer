@@ -79,7 +79,6 @@ def load_scenes(ctx, vbo):
 
 
 # =========================================================================== director
-TRANSITION_BEATS = {"calm": 8, "build": 2, "peak": 0, "groove": 1}  # 0 = hard cut
 
 
 class Director:
@@ -196,7 +195,7 @@ class Director:
             self._section_handled = True
             showing = self.nxt if self.nxt is not None else self.cur
             if not self.fits(showing, mood):
-                self.switch(self.choose(mood), now, 4 if mood == "calm" else 2, bpm)
+                self.switch(self.choose(mood), now, self.vibes.transition(mood), bpm)
 
         # bar grid: count bars on the current scene and switch on (phrase-aligned) bars
         bar = math.floor((beat - snap["bar_offset"]) / 4)
@@ -211,13 +210,13 @@ class Director:
             if self.genre_dirty and bar % 4 == 0:
                 self.genre_dirty = False
                 if not self.vibes.in_pool(self.scenes[showing], self.pool()):
-                    self.switch(self.choose(mood), now, 4, bpm)   # new genre: fade to a fitting scene
+                    self.switch(self.choose(mood), now, self.vibes.transition(mood), bpm)  # new genre
                     return
             need = self.bars_needed(sec)
             align = 8 if need >= 8 else (4 if need >= 4 else 1)
             if (self.bars_on_scene >= need and bar % align == 0
                     and now - self.last_switch > self.vibes.min_seconds):
-                self.switch(self.choose(mood), now, TRANSITION_BEATS[mood], bpm)
+                self.switch(self.choose(mood), now, self.vibes.transition(mood), bpm)
 
     @property
     def mix(self):
@@ -628,6 +627,9 @@ class App:
                 continue
             self.frame()
             glfw.swap_buffers(self.win)
+            # wait until the GPU has shown this frame: stops the driver from queueing 2-3
+            # frames ahead, which would add 30-50 ms between the music and the picture
+            self.ctx.finish()
             now = time.perf_counter()
             self.fps += ((1.0 / max(now - last_t, 1e-4)) - self.fps) * 0.05
             last_t = now
