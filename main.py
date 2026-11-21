@@ -209,7 +209,7 @@ class Palette:
 
 # =========================================================================== HUD
 class Hud:
-    W, H = 600, 190
+    W, H = 600, 212
 
     def __init__(self, ctx):
         self.tex = ctx.texture((self.W, self.H), 4)
@@ -240,12 +240,19 @@ class Hud:
             x = 232 + i * 22
             d.ellipse([x, 22, x + 14, 36], fill=(sc + (255,)) if i == b else (60, 60, 75, 255))
         d.text((336, 8), f"{snap['camelot_str']}", font=self.f_big, fill=(255, 255, 255, 255))
-        d.text((400, 26), snap["key"], font=self.f, fill=(170, 170, 190, 255))
+        from_rb = snap.get("key_source") == "rekordbox"  # exact key from the library -> green
+        d.text((400, 26), snap["key"], font=self.f, fill=(110, 230, 140, 255) if from_rb else (170, 170, 190, 255))
         d.rounded_rectangle([462, 16, 584, 42], 8, fill=sc + (255,))
         d.text((523, 29), sec.upper(), font=self.f, fill=(10, 10, 10, 255), anchor="mm")
 
         d.text((16, 56), f"Scene: {scene_name}" + ("   [LOCKED]" if locked else "   [auto]"),
                font=self.f, fill=(230, 230, 240, 255))
+        t = snap.get("track")
+        if t:
+            name = f"{t['artist']} - {t['title']}" if t["artist"] else t["title"]
+            name = name if len(name) < 58 else name[:55] + "..."
+            extra = f"   {t['bpm']:.1f} BPM" if t.get("bpm") else ""
+            d.text((16, 78), "Track: " + name + extra, font=self.f_small, fill=(110, 230, 140, 255))
         # phrase progress
         ph = ((beat - snap["bar_offset"]) % 32) / 32
         d.rounded_rectangle([400, 62, 584, 72], 5, fill=(50, 50, 65, 255))
@@ -257,19 +264,19 @@ class Hud:
                   ("BUILD", snap["build"]), ("KICK", snap["kick"])]
         for i, (name, v) in enumerate(meters):
             x = 16 + i * 72
-            d.text((x, 86), name, font=self.f_small, fill=(150, 150, 170, 255))
-            d.rounded_rectangle([x, 104, x + 62, 112], 4, fill=(45, 45, 60, 255))
-            d.rounded_rectangle([x, 104, x + max(6, int(62 * min(1, v))), 112], 4, fill=(120 + int(135 * v), 200, 255 - int(100 * v), 255))
+            d.text((x, 102), name, font=self.f_small, fill=(150, 150, 170, 255))
+            d.rounded_rectangle([x, 120, x + 62, 128], 4, fill=(45, 45, 60, 255))
+            d.rounded_rectangle([x, 120, x + max(6, int(62 * min(1, v))), 128], 4, fill=(120 + int(135 * v), 200, 255 - int(100 * v), 255))
 
         dev = snap["device"]
         dev = dev if len(dev) < 52 else dev[:49] + "..."
-        d.text((16, 122), f"Source: {dev}", font=self.f_small, fill=(170, 170, 190, 255))
+        d.text((16, 140), f"Source: {dev}", font=self.f_small, fill=(170, 170, 190, 255))
         if snap.get("status"):  # audio problem takes priority over the info line
-            d.text((16, 140), "! " + snap["status"][:80], font=self.f_small, fill=(255, 170, 80, 255))
+            d.text((16, 160), "! " + snap["status"][:80], font=self.f_small, fill=(255, 170, 80, 255))
         else:
-            d.text((16, 140), f"Strobe {'on' if strobe else 'off'}  ·  latency {latency_ms:+d} ms  ·  {fps:.0f} fps",
+            d.text((16, 160), f"Strobe {'on' if strobe else 'off'}  ·  latency {latency_ms:+d} ms  ·  {fps:.0f} fps",
                    font=self.f_small, fill=(170, 170, 190, 255))
-        d.text((16, 160), "F full · M monitor · ←/→ scene · L lock · D source · B downbeat · S strobe · [ ] latency · H hide",
+        d.text((16, 182), "F full · M monitor · ←/→ scene · L lock · D source · B downbeat · S strobe · [ ] latency · H hide",
                font=self.f_small, fill=(120, 120, 140, 255))
         self.tex.write(img.tobytes())
 
@@ -315,6 +322,10 @@ class App:
         self.analyzer = audio.Analyzer(args.device, sensitivity=args.sensitivity)
         if not args.no_link:
             self.analyzer.external_clock = audio.LinkClock()
+        if not args.no_library:
+            import rekordbox_db
+            self.library = rekordbox_db.RekordboxLibrary()
+            self.analyzer.library = self.library
         self.analyzer.start()
         self.director = Director(self.scenes, args.phrase)
         if args.scene:
@@ -567,6 +578,8 @@ class App:
             if self.args.quit_after and el > self.args.quit_after:
                 break
         self.analyzer.stop()
+        if getattr(self, "library", None):
+            self.library.stop()
         glfw.terminate()
 
 
@@ -582,6 +595,8 @@ def main():
     ap.add_argument("--phrase", type=int, default=32, help="beats per phrase for scene changes")
     ap.add_argument("--no-strobe", action="store_true", help="disable beat strobes (flashing)")
     ap.add_argument("--no-link", action="store_true", help="don't use Ableton Link for tempo")
+    ap.add_argument("--no-library", action="store_true",
+                    help="don't read the playing track's key/BPM from the rekordbox library")
     ap.add_argument("--no-hud", action="store_true")
     ap.add_argument("--scene", help="start on this scene (name or file) and lock it")
     ap.add_argument("--autoshot", type=float, default=0, help=argparse.SUPPRESS)
@@ -595,7 +610,26 @@ def main():
             print(f"  {lvl:>10}   {audio.device_label(dev)}")
         print("\nUse e.g.  --device \"DDJ\"  to pick one.")
         return
-    App(args).run()
+    try:
+        App(args).run()
+    except (Exception, SystemExit) as e:
+        if isinstance(e, SystemExit) and not e.code:
+            raise
+        import traceback
+        traceback.print_exc()
+        if WINDOWLESS:  # no console to show the error in: tell the user with a popup
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(
+                None, f"{e}\n\nDetails: {LOG_PATH}", "Rekordbox Visualizer stopped", 0x10)
+        raise
+
+
+# Started with pythonw.exe (no console window): send all messages to a log file instead.
+WINDOWLESS = sys.stdout is None
+LOG_PATH = HERE / "visualizer.log"
+if WINDOWLESS:
+    _log = open(LOG_PATH, "w", encoding="utf-8", buffering=1)
+    sys.stdout = sys.stderr = _log
 
 
 if __name__ == "__main__":

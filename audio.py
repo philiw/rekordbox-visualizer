@@ -138,6 +138,9 @@ class Analyzer:
         self.external_clock = None  # set to LinkClock by main if available
         self.busy = {}              # device label -> time it failed to open
         self.status = ""            # problem with the audio source, shown in the HUD
+        self.library = None         # RekordboxLibrary, set by main if available
+        self.track = None           # playing track from the rekordbox library
+        self.key_source = "audio"
 
         self.freqs = np.fft.rfftfreq(NFFT, 1.0 / SR)
         self.window = np.hanning(NFFT).astype(np.float32)
@@ -446,6 +449,10 @@ class Analyzer:
         # ---- song structure
         self._update_section(now, bands_db, level_db, onset, kick_rate, silent)
 
+        # ---- rekordbox library: exact key of the playing track (cheap, every ~0.1 s)
+        if self.library is not None and self.frame % 10 == 0:
+            self._apply_library()
+
         # ---- waveform for shaders
         w = self.buf[-NWAVE * 2::2]
         peak = np.abs(w).max()
@@ -480,11 +487,20 @@ class Analyzer:
             val = ac[li] * (1 - fr) + ac[li + 1] * fr
             score += np.where(ok, val, 0) * wgt
         prior = np.exp(-0.5 * (np.log2(bpms / 126.0) / 0.55) ** 2)
+        hint = self.track["bpm"] if self.track else None
+        if hint:
+            # rekordbox's analysed BPM of the playing track: a strong prior that rules out
+            # half/double-tempo mistakes. It stays wide (~4%) because a deck may be pitched
+            # to match the other track, so the exact tempo still comes from the audio.
+            near = lambda f: np.exp(-0.5 * (np.log2(bpms / (hint * f)) / 0.06) ** 2)
+            prior = 0.15 * prior + near(1.0) + 0.25 * (near(2.0) + near(0.5))
         score = score * (0.5 + prior)
         i = int(np.argmax(score))
         cand = float(bpms[i])
         conf = float(np.clip(score[i] / 1.5, 0, 1))
         self.audio_bpm, self.audio_conf = cand, conf  # raw estimate, used to sanity-check Link
+        if hint and abs(cand / hint - 1) < 0.004:
+            cand = hint  # within 0.4% of the analysed BPM: deck is at 0% pitch, use the exact value
 
         if abs(cand - self.bpm) / self.bpm < 0.025:
             self.bpm += (cand - self.bpm) * 0.25
@@ -543,6 +559,17 @@ class Analyzer:
                 return
         self._rebase(self.bpm, now)
 
+    def _apply_library(self):
+        t = self.library.current()
+        self.track = t
+        if t and t.get("camelot"):
+            self.camelot, self.minor = t["camelot"], t["minor"]
+            self.camelot_str = f"{t['camelot']}{'A' if t['minor'] else 'B'}"
+            self.key_name = t["key"]
+            self.key_source = "rekordbox"
+        else:
+            self.key_source = "audio"
+
     def _update_chroma(self):
         x = self.buf * self.chroma_window
         mag = np.abs(np.fft.rfft(x))[self.chroma_bins]
@@ -561,6 +588,8 @@ class Analyzer:
                 if r > best_r:
                     best_r, best = r, (tonic, minor)
         tonic, minor = best
+        if self.key_source == "rekordbox":
+            return  # the library knows the key exactly; keep the chroma running as a fallback only
         self.minor = minor
         self.camelot = (CAMELOT_MINOR if minor else CAMELOT_MAJOR)[tonic]
         self.camelot_str = f"{self.camelot}{'A' if minor else 'B'}"
@@ -633,7 +662,8 @@ class Analyzer:
             "drop": self.drop_env, "drop_count": self.drop_count,
             "section": self.section, "section_since": self.section_since,
             "camelot": self.camelot, "camelot_str": self.camelot_str,
-            "key": self.key_name, "minor": self.minor,
+            "key": self.key_name, "minor": self.minor, "key_source": self.key_source,
+            "track": self.track,
             "device": device_label(self.device) if self.device else "--",
             "status": self.status,
             "link": self.link_used,

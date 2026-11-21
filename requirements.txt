@@ -4,3 +4,4 @@ moderngl>=5.8
 glfw>=2.6
 pillow>=10.1
 aalink>=0.2
+pyrekordbox>=0.5

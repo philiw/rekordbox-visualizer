@@ -23,6 +23,8 @@ git clone https://github.com/philiw/rekordbox-visualizer.git
 
 Then double-click **`Start Visualizer.bat`**. The first start creates a local Python environment and installs the dependencies, which takes about a minute. Then play something in rekordbox.
 
+After the first start the app opens without a console window. Its messages go to `visualizer.log`, and if it ever stops with an error, a popup tells you.
+
 You can also set it up by hand: `pip install -r requirements.txt`, then `python main.py`.
 
 To go fullscreen on an external monitor: press **M**, or run `"Start Visualizer.bat" --fullscreen --monitor 1`.
@@ -54,9 +56,18 @@ Tested with rekordbox 7.2 and a DDJ-FLX4. Two things that don't work:
 
 As a last resort, the laptop microphone can listen to your speakers.
 
+## Exact key and BPM from your rekordbox library
+
+When rekordbox runs on the same computer, the app reads the track you're playing from rekordbox's history. It opens your library read-only with [pyrekordbox](https://github.com/dylanljones/pyrekordbox), so no setup is needed. The HUD then shows the track name, and the key turns green when it comes from rekordbox.
+
+- **Key:** the colours use rekordbox's own key analysis instead of the estimate from the audio.
+- **BPM:** the track's analysed BPM rules out half- or double-tempo mistakes. If the deck is at 0% pitch, the app uses the exact value. A pitched deck (for example a 140 BPM track played at 142) still gets its real tempo from the audio.
+
+rekordbox only adds a track to the history after it has been playing for a little while, so after a transition the key switches a bit late. If there's no recent history (the newest entry is more than 20 minutes old), the app falls back to the audio estimate. Turn this off with `--no-library`.
+
 ## Tighter sync: Ableton Link
 
-If your rekordbox has the **LINK** button (Performance mode), switch it on. The HUD then shows `LINK`, and tempo and beat phase come straight from rekordbox instead of being worked out from the audio.
+If your rekordbox has the **LINK** button (Performance mode), switch it on and press **LINK on the playing deck** too. The app then takes tempo and beat phase straight from rekordbox instead of working them out from the audio. If the Link tempo doesn't match the music it hears (for example because the deck isn't linked), the app ignores Link. The HUD shows `LINK` while Link is in use.
 
 ## Keys
 
@@ -90,6 +101,7 @@ If your rekordbox has the **LINK** button (Performance mode), switch it on. The 
 --scene tunnel        start on one scene and lock it
 --no-strobe           never flash
 --no-link             ignore Ableton Link
+--no-library          don't read key/BPM of the playing track from the rekordbox library
 --no-hud              start with the HUD hidden
 ```
 
