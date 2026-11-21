@@ -38,10 +38,17 @@ By default the app picks the loudest audio source and prefers a connected Pionee
 - To see the current level of every source: `"Start Visualizer.bat" --list-devices`
 - To force a source: `--device "DDJ"` (any part of its name works)
 
-If the meters stay flat with a DJ controller: rekordbox may be sending audio through the controller's ASIO driver, which bypasses Windows, so nothing can capture it. You have three ways around this:
-1. Try the controller's input source (e.g. `Line (DDJ-FLX4)` without "[loopback]"). Press D until you see it.
-2. In rekordbox, go to *Preferences → Audio* and pick a non-ASIO (WASAPI) output if your version offers one.
-3. Use the laptop microphone. It hears the speakers, and the analysis adapts to the level.
+### DJ controllers (DDJ-FLX4 etc.)
+
+Rekordbox opens DJ controllers in exclusive mode, so no other program can record their audio. The info panel then shows "locked by another app". The reliable fix is a silent virtual cable:
+
+1. Install the free [VB-CABLE](https://vb-audio.com/Cable/) driver and restart rekordbox.
+2. In rekordbox, open *Preferences → Audio* and turn on **PC MASTER OUT**. The full label reads "Output audio from the computer's built-in speakers and your DJ equipment".
+3. In Windows, open *Settings → System → Sound → Volume mixer*. While a track is playing, set **rekordbox**'s output device to **CABLE Input**.
+
+Your mix still plays through the controller. The copy for the PC goes into the cable, where nobody hears it, and the visualizer picks it up automatically.
+
+Muting the laptop speakers instead doesn't work on many sound drivers, because the app then receives silence. As a last resort, the laptop microphone can listen to your speakers.
 
 ## Tighter sync: Ableton Link
 

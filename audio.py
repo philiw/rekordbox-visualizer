@@ -84,6 +84,8 @@ def pick_device(query: str | None = None, exclude=()):
         score = 0
         if any(k in n for k in ("ddj", "rekordbox", "pioneer", "alphatheta", "xdj", "djm")):
             score += 2
+        if "vb-audio" in n or n.startswith("cable"):  # virtual cable carrying rekordbox's PC MASTER OUT
+            score += 3
         try:
             if dev.isloopback and dev.name == sc.default_speaker().name:
                 score += 1
@@ -192,6 +194,9 @@ class Analyzer:
         # tempo / phase
         self.bpm = 124.0
         self.bpm_conf = 0.0
+        self.audio_bpm = 124.0      # tempo heard in the audio (independent of Link)
+        self.audio_conf = 0.0
+        self.link_used = False
         self.beat = 0.0             # continuous beat counter
         self.beat_time = self.clock()
         self.bar_offset = 0         # which beat index is a downbeat (user resync)
@@ -479,6 +484,7 @@ class Analyzer:
         i = int(np.argmax(score))
         cand = float(bpms[i])
         conf = float(np.clip(score[i] / 1.5, 0, 1))
+        self.audio_bpm, self.audio_conf = cand, conf  # raw estimate, used to sanity-check Link
 
         if abs(cand - self.bpm) / self.bpm < 0.025:
             self.bpm += (cand - self.bpm) * 0.25
@@ -523,11 +529,19 @@ class Analyzer:
 
     def _advance_beat(self, now):
         clk = self.external_clock
+        self.link_used = False
         if clk is not None and clk.active():
             b, bpm = clk.read()
-            self.beat, self.bpm, self.beat_time, self.bpm_conf = b, bpm, now, 1.0
-        else:
-            self._rebase(self.bpm, now)
+            # Only trust Link if it matches what we hear. In rekordbox the Link session
+            # tempo follows the music only when the playing deck is linked; otherwise it
+            # sits at its own tempo (e.g. 120) and would put the visuals off-beat.
+            hearing_music = self.silence_time < 2.0 and self.audio_conf >= 0.25
+            agrees = any(abs(bpm / (self.audio_bpm * k) - 1) < 0.03 for k in (0.5, 1.0, 2.0))
+            if not hearing_music or agrees:
+                self.beat, self.bpm, self.beat_time, self.bpm_conf = b, bpm, now, 1.0
+                self.link_used = True
+                return
+        self._rebase(self.bpm, now)
 
     def _update_chroma(self):
         x = self.buf * self.chroma_window
@@ -622,7 +636,7 @@ class Analyzer:
             "key": self.key_name, "minor": self.minor,
             "device": device_label(self.device) if self.device else "--",
             "status": self.status,
-            "link": bool(self.external_clock and self.external_clock.active()),
+            "link": self.link_used,
         }
 
     def snapshot(self):
