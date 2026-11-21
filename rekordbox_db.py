@@ -77,7 +77,12 @@ class RekordboxLibrary:
         warnings.filterwarnings("ignore")
         logging.getLogger("pyrekordbox").setLevel(logging.ERROR)
         from pyrekordbox import MasterDatabase
-        return MasterDatabase()
+        db = MasterDatabase()
+        # some libraries contain titles with broken UTF-8, which would make every query
+        # on that track fail - decode leniently instead
+        raw = db.session.connection().connection.dbapi_connection
+        raw.text_factory = lambda b: b.decode("utf-8", "replace")
+        return db
 
     def _run(self):
         from pyrekordbox.masterdb import models as M
@@ -103,6 +108,7 @@ class RekordboxLibrary:
                         "id": c.ID,
                         "title": c.Title or "",
                         "artist": getattr(c, "ArtistName", "") or "",
+                        "genre": getattr(c, "GenreName", "") or "",
                         "bpm": (c.BPM or 0) / 100.0 or None,
                         "key_raw": key_name,
                         "camelot": parsed[0] if parsed else None,
