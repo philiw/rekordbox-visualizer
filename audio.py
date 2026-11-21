@@ -59,16 +59,19 @@ def probe_devices(devices, seconds=0.35):
     return results
 
 
-def pick_device(query: str | None = None):
+def pick_device(query: str | None = None, exclude=()):
     """Choose a capture device.
 
     With a query: first device whose name contains it (case-insensitive).
     Otherwise: the loudest device right now; ties are broken in favour of the
     DJ controller (DDJ / rekordbox / Pioneer) and then the default speaker loopback.
+    Devices whose label is in `exclude` (e.g. locked by another app) are skipped.
     """
     devices = list_devices()
     if not devices:
         raise RuntimeError("No audio capture devices found")
+    usable = [d for d in devices if device_label(d) not in exclude]
+    devices = usable or devices
     if query:
         q = query.lower()
         for dev in devices:
@@ -131,6 +134,8 @@ class Analyzer:
         self._switch_to = None
         self.device = None
         self.external_clock = None  # set to LinkClock by main if available
+        self.busy = {}              # device label -> time it failed to open
+        self.status = ""            # problem with the audio source, shown in the HUD
 
         self.freqs = np.fft.rfftfreq(NFFT, 1.0 / SR)
         self.window = np.hanning(NFFT).astype(np.float32)
@@ -291,7 +296,9 @@ class Analyzer:
             return self._run_file(self.device_query)
         last_hunt = time.perf_counter()
         while not self._stop.is_set():
-            dev = self._switch_to or self.device or pick_device(self.device_query)
+            now = time.perf_counter()
+            busy = {lbl for lbl, t in self.busy.items() if now - t < 30}
+            dev = self._switch_to or self.device or pick_device(self.device_query, exclude=busy)
             manual = self._switch_to is not None
             self._switch_to = None
             self.device = dev
@@ -313,10 +320,20 @@ class Analyzer:
                         else:
                             mono = data
                         self._process(mono.astype(np.float32) * self.sensitivity)
-            except Exception as e:  # device unplugged etc.
-                print(f"[audio] device error: {e!r}; retrying in 1 s")
+            except Exception as e:  # device unplugged, or locked by another app
+                label = device_label(dev)
+                self.busy[label] = time.perf_counter()
+                if "8889000a" in str(e).lower():
+                    # AUDCLNT_E_DEVICE_IN_USE: opened in exclusive mode (rekordbox does this
+                    # with DJ controllers), so nobody else can record it
+                    self.status = f"{dev.name} is locked by another app (rekordbox?)"
+                    print(f"[audio] {label} is in exclusive use by another program "
+                          f"(rekordbox's controller driver?) - trying another source")
+                else:
+                    self.status = f"{dev.name}: {e}"
+                    print(f"[audio] device error on {label}: {e!r} - trying another source")
                 self.device = None
-                time.sleep(1.0)
+                time.sleep(3.0 if self.device_query else 0.5)
 
     # ------------------------------------------------------------------ analysis
     def _process(self, x: np.ndarray):
@@ -337,6 +354,8 @@ class Analyzer:
         level_db = 20 * np.log10(rms)
         silent = level_db < -62
         self.silence_time = self.silence_time + 1 / FPS if silent else 0.0
+        if not silent and self.status:
+            self.status = ""  # we're getting audio now - the earlier problem no longer matters
 
         # ---- bands (adaptive gain, 30 dB window under a decaying peak)
         bands_db = {}
@@ -602,6 +621,7 @@ class Analyzer:
             "camelot": self.camelot, "camelot_str": self.camelot_str,
             "key": self.key_name, "minor": self.minor,
             "device": device_label(self.device) if self.device else "--",
+            "status": self.status,
             "link": bool(self.external_clock and self.external_clock.active()),
         }
 

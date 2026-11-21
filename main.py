@@ -264,8 +264,11 @@ class Hud:
         dev = snap["device"]
         dev = dev if len(dev) < 52 else dev[:49] + "..."
         d.text((16, 122), f"Source: {dev}", font=self.f_small, fill=(170, 170, 190, 255))
-        d.text((16, 140), f"Strobe {'on' if strobe else 'off'}  ·  latency {latency_ms:+d} ms  ·  {fps:.0f} fps",
-               font=self.f_small, fill=(170, 170, 190, 255))
+        if snap.get("status"):  # audio problem takes priority over the info line
+            d.text((16, 140), "! " + snap["status"][:80], font=self.f_small, fill=(255, 170, 80, 255))
+        else:
+            d.text((16, 140), f"Strobe {'on' if strobe else 'off'}  ·  latency {latency_ms:+d} ms  ·  {fps:.0f} fps",
+                   font=self.f_small, fill=(170, 170, 190, 255))
         d.text((16, 160), "F full · M monitor · ←/→ scene · L lock · D source · B downbeat · S strobe · [ ] latency · H hide",
                font=self.f_small, fill=(120, 120, 140, 255))
         self.tex.write(img.tobytes())
