@@ -5,6 +5,7 @@ uniform float uTime;      // seconds since start
 uniform float uBeat;      // continuous beat counter, tempo-locked (1.0 = one beat)
 uniform float uBpm;
 uniform float uBar;       // beat inside the bar, 0..4
+uniform float uGridBeat;  // beats counted from the downbeat grid (B key), so phrases start at multiples of 32
 uniform float uPhrase;    // 0..1 progress through the 32-beat phrase
 uniform float uKick;      // 1 on a kick, decays fast
 uniform float uSub, uBass, uLowMid, uMid, uHigh, uLevel;   // 0..1 smoothed bands
@@ -13,6 +14,7 @@ uniform float uBuild;     // buildup tension 0..1
 uniform float uDrop;      // 1 right at a drop, decays over a few bars
 uniform float uBright;    // spectral brightness 0..1
 uniform float uSeed;      // random per scene activation -> variations
+uniform float uStrobe;    // 1 = strobe allowed (S key), 0 = keep flashes soft
 uniform vec3  uCol1, uCol2, uCol3;   // palette derived from the musical key
 uniform sampler2D uSpec;  // 128 log-spaced spectrum bins (x = 0..1)
 uniform sampler2D uWave;  // 256 waveform samples (-1..1)

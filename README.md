@@ -7,7 +7,7 @@ Real-time visuals for your DJ set, generated on the GPU. The app listens to what
 - **Song section:** `groove`, `breakdown`, `buildup` and `drop`. Scenes are chosen to fit each section, and a drop gets a hard cut and a flash.
 - **Musical key.** This sets the colour palette. Keys that sit next to each other on the Camelot wheel get neighbouring hues, so harmonic mixes drift smoothly through the colours.
 
-There are 8 GPU shader scenes: Neon Tunnel, Kaleidoscope, Pulse Cells, Liquid Plasma, Retro Horizon, Hyperspace, Laser Show and Spectrum Bloom. They switch on phrase boundaries (every 32 beats) and blend with transitions that run in time with the tempo.
+There are 14 GPU shader scenes: Neon Tunnel, Kaleidoscope, Pulse Cells, Liquid Plasma, Retro Horizon, Hyperspace, Laser Show and Spectrum Bloom, plus five punchy, beat-slamming ones for peak time: Slam Bars, Shockwave, Glitch Slice, LED Wall and Polygon Slam. For breakdowns there's Mandelbrot Zoom, a slow, continuous dive into the Mandelbrot set that glides from one dive into the next without a cut. They switch on phrase boundaries (every 32 beats) and blend with transitions that run in time with the tempo.
 
 ## Requirements
 
@@ -75,6 +75,7 @@ Open `vibes.toml` in any text editor. Changes apply within about 2 seconds, even
 
 - **`[timing]`**: how many bars a scene stays, separately for each part of a song: `groove`, `peak` (after a drop), `build` and `calm` (breakdowns). At 140 BPM, 8 bars are about 14 s. Scene changes land on phrase starts, and a drop always cuts straight to a new scene. During a set, **+** and **−** double or halve all of these times.
 - **`[transitions]`**: how long the fade into the next scene takes, in beats, per part of the song. `0` means a hard cut on the beat. Drops always cut instantly, about 16 ms after the first kick of the drop.
+- **`[effects]`**: `punch` sets how hard every scene zooms and shakes on the kick (0 = off, 2 = heavy).
 - **`[scenes]`**: which parts of a song each scene is used for. Set a scene to `[]` to keep it out of the automatic rotation (you can still pick it with 1–8 or the arrow keys).
 - **`[genres]`**: which scenes fit which genre, using the genre field from your rekordbox library. For example, `"Techno" = ["lasers", "tunnel", "cells"]`. Names match partially and ignore case, so "Techno" also covers "Hard Techno". Genres you don't list can use every scene. When the next track has a different genre, the app fades to a fitting scene at the next 4-bar boundary.
 
@@ -87,7 +88,7 @@ If you make a typo in the file, the app keeps the previous settings and prints t
 | F / F11 | Toggle fullscreen |
 | M | Fullscreen on the next monitor |
 | → / Space, ← | Next / previous scene |
-| 1–8 | Jump to a scene |
+| 1–9 | Jump to a scene (the arrow keys reach all of them) |
 | L | Lock the current scene (stops automatic switching) |
 | + / − | Scenes stay twice as long / half as long (from ¼× to 4× the times in `vibes.toml`) |
 | B | Press on a downbeat ("the 1") to line up bars and phrases with the music |

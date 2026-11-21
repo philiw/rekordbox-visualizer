@@ -1,7 +1,9 @@
 # Rekordbox Visualizer - vibes
 # You can edit this file while the app is running; changes apply within ~2 seconds.
 # Scene names are the file names in shaders/scenes (without .glsl):
-#   cells, grid, kaleido, lasers, plasma, spectrum_ring, starfield, tunnel
+#   cells, grid, kaleido, lasers, plasma, spectrum_ring, starfield, tunnel,
+#   slam_bars, shockwave, glitch, led_wall, polygon_slam   (the punchy ones),
+#   mandelbrot   (slow fractal dive for breakdowns)
 
 [timing]
 # How many bars (1 bar = 4 beats) a scene stays before the next one, per part of the song.
@@ -22,9 +24,13 @@ peak   = 0
 build  = 1
 calm   = 4
 
+[effects]
+# Kick punch: a short zoom and shake on every kick, for all scenes. 0 = off, 1 = normal, 2 = heavy.
+punch = 1.0
+
 [scenes]
 # Which parts of the song each scene is used for: calm, groove, build, peak.
-# An empty list [] means "never pick automatically" (still reachable with 1-8 and the arrow keys).
+# An empty list [] means "never pick automatically" (still reachable with 1-9 and the arrow keys).
 cells         = ["groove", "peak"]
 grid          = ["groove", "peak"]
 kaleido       = ["groove", "calm", "peak"]
@@ -33,15 +39,23 @@ plasma        = ["calm", "build"]
 spectrum_ring = ["groove", "calm"]
 starfield     = ["build", "calm", "peak"]
 tunnel        = ["groove", "peak", "build"]
+slam_bars     = ["peak", "groove"]
+shockwave     = ["peak", "groove", "build"]
+glitch        = ["peak", "groove"]
+led_wall      = ["groove", "peak", "build"]
+polygon_slam  = ["peak", "groove"]
+mandelbrot    = ["calm"]
 
 [genres]
 # Genre of the playing track (from rekordbox) -> the scenes allowed for it.
 # Matching ignores upper/lower case and also matches parts of a genre, so "Techno" also
 # covers "Hard Techno" and "Melodic Techno". Genres not listed here may use every scene.
 # Within these lists the song-part rules above still apply (a breakdown picks a calm one).
-"Techno"      = ["lasers", "tunnel", "cells", "grid", "starfield", "spectrum_ring"]
-"Trance"      = ["kaleido", "starfield", "plasma", "tunnel", "spectrum_ring", "lasers"]
-"House"       = ["grid", "cells", "kaleido", "plasma", "spectrum_ring"]
-"Pop"         = ["grid", "kaleido", "spectrum_ring", "plasma", "cells"]
-"Dance"       = ["grid", "kaleido", "spectrum_ring", "cells", "lasers", "plasma"]
-"Hip-Hop"     = ["grid", "spectrum_ring", "cells", "plasma"]
+"Techno"      = ["lasers", "tunnel", "cells", "grid", "starfield", "spectrum_ring",
+                 "slam_bars", "shockwave", "glitch", "led_wall", "polygon_slam", "mandelbrot"]
+"Trance"      = ["kaleido", "starfield", "plasma", "tunnel", "spectrum_ring", "lasers",
+                 "shockwave", "polygon_slam", "mandelbrot"]
+"House"       = ["grid", "cells", "kaleido", "plasma", "spectrum_ring", "led_wall", "polygon_slam", "mandelbrot"]
+"Pop"         = ["grid", "kaleido", "spectrum_ring", "plasma", "cells", "mandelbrot"]
+"Dance"       = ["grid", "kaleido", "spectrum_ring", "cells", "lasers", "plasma", "led_wall", "shockwave", "mandelbrot"]
+"Hip-Hop"     = ["grid", "spectrum_ring", "cells", "plasma", "led_wall", "glitch", "mandelbrot"]

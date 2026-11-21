@@ -21,6 +21,7 @@ class Vibes:
         self.bars_cfg = dict(DEFAULT_BARS)
         self.min_seconds = 8.0
         self.trans_cfg = dict(DEFAULT_TRANSITIONS)
+        self.punch = 1.0
         self.scene_moods: dict[str, set[str]] = {}
         self.genres: dict[str, set[str]] = {}
         self.error = ""
@@ -65,6 +66,7 @@ class Vibes:
             if mood in MOODS:
                 trans[mood] = max(0.0, float(beats))
         self.trans_cfg = trans
+        self.punch = max(0.0, float(data.get("effects", {}).get("punch", 1.0)))
         self.scene_moods = {k.lower(): {m.lower() for m in v} for k, v in data.get("scenes", {}).items()}
         self.genres = {k.lower(): {s.lower() for s in v} for k, v in data.get("genres", {}).items()}
         self.error = ""

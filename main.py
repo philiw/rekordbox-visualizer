@@ -545,10 +545,10 @@ class App:
         p = self.palette.cols
         return {
             "uRes": (float(self.rsize[0]), float(self.rsize[1])), "uTime": now - self.t0, "uBeat": beat, "uBpm": snap["bpm"],
-            "uBar": (beat - snap["bar_offset"]) % 4, "uPhrase": ((beat - snap["bar_offset"]) % 32) / 32,
+            "uBar": (beat - snap["bar_offset"]) % 4, "uGridBeat": beat - snap["bar_offset"], "uPhrase": ((beat - snap["bar_offset"]) % 32) / 32,
             "uKick": kick, "uSub": b["sub"], "uBass": b["bass"], "uLowMid": b["lowmid"], "uMid": b["mid"],
             "uHigh": b["high"], "uLevel": snap["level"], "uEnergy": snap["energy"], "uBuild": snap["build"],
-            "uDrop": snap["drop"], "uBright": snap["centroid"],
+            "uDrop": snap["drop"], "uBright": snap["centroid"], "uStrobe": 1.0 if self.strobe else 0.0,
             "uCol1": tuple(p[0]), "uCol2": tuple(p[1]), "uCol3": tuple(p[2]),
         }
 
@@ -634,6 +634,7 @@ class App:
         set_uniform(pp, "uTime", u["uTime"])
         set_uniform(pp, "uBloom", 0.6 + 0.6 * snap["energy"])
         set_uniform(pp, "uExposure", 1.3)
+        set_uniform(pp, "uPunch", self.director.vibes.punch)
         self.post_vao.render(moderngl.TRIANGLE_STRIP)
         self.comp_i = 1 - cur
 
