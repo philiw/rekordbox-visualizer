@@ -16,8 +16,9 @@ vec3 scene(vec2 uv, vec2 p) {
     float stripes = smoothstep(0.35, 0.5, abs(fract(sym * 64.0) - 0.5));
     vec3 col = pal(sym + uBeat * 0.03) * inBar * stripes * 1.3;
 
-    // waveform ring
-    float w = wave(a / TAU + 0.5) * 0.06 * (0.5 + uLevel);
+    // waveform ring, mirrored top/bottom like the bars so the ends of the
+    // waveform never meet (wrapping it once around the circle left a seam)
+    float w = wave(sym * 0.5 + 0.25) * 0.06 * (0.5 + uLevel);
     float ring = smoothstep(0.012, 0.0, abs(r - (base - 0.06 + w)));
     col += uCol3 * ring * 1.5;
     // centre pulse
