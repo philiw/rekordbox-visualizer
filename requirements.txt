@@ -1,0 +1,6 @@
+numpy>=1.26
+soundcard>=0.4.3
+moderngl>=5.8
+glfw>=2.6
+pillow>=10.1
+aalink>=0.2
